@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Audio Router</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    select, button { margin: 10px 0; padding: 5px; }
+  </style>
+</head>
+<body>
+  <h1>Audio Router</h1>
+  <label for="inputSelect">Input Device:</label>
+  <select id="inputSelect"></select><br/>
+
+  <label for="outputSelect">Output Device:</label>
+  <select id="outputSelect"></select><br/>
+
+  <button onclick="startRouting()">Start Monitoring</button>
+  <button onclick="stopRouting()">Stop</button>
+
+  <script>
+    async function fetchDevices() {
+      const res = await fetch('/api/devices');
+      const data = await res.json();
+
+      const inputSelect = document.getElementById('inputSelect');
+      const outputSelect = document.getElementById('outputSelect');
+
+      data.inputs.forEach(d => {
+        const option = new Option(d.name, d.id);
+        inputSelect.appendChild(option);
+      });
+
+      data.outputs.forEach(d => {
+        const option = new Option(d.name, d.id);
+        outputSelect.appendChild(option);
+      });
+    }
+
+    async function startRouting() {
+      const inputId = document.getElementById('inputSelect').value;
+      const outputId = document.getElementById('outputSelect').value;
+
+      await fetch('/api/route', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inputId: parseInt(inputId), outputId: parseInt(outputId) })
+      });
+    }
+
+    async function stopRouting() {
+      await fetch('/api/stop', { method: 'POST' });
+    }
+
+    fetchDevices();
+  </script>
+</body>
+</html>
