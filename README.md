@@ -17,7 +17,7 @@ A Node.js Express server for audio routing and monitoring using naudiodon.
 1. Clone the repository
 2. Install dependencies:
    ```bash
-   npm install
+   yarn install
    ```
 3. Copy environment configuration:
    ```bash
@@ -25,7 +25,7 @@ A Node.js Express server for audio routing and monitoring using naudiodon.
    ```
 4. Start the server:
    ```bash
-   npm start
+   yarn start
    ```
 
 ## Development
@@ -33,7 +33,7 @@ A Node.js Express server for audio routing and monitoring using naudiodon.
 Run in development mode with auto-restart:
 
 ```bash
-npm run dev
+yarn dev
 ```
 
 ## API Endpoints
