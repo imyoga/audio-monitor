@@ -6,7 +6,7 @@ class AudioService {
 		this.defaultConfig = {
 			channelCount: 2,
 			sampleRate: 48000,
-			sampleFormat: portAudio.SampleFormat16Bit,
+			sampleFormat: portAudio.SampleFormat24Bit,
 			framesPerBuffer: 512,
 		}
 	}
@@ -24,6 +24,26 @@ class AudioService {
 			return { inputs, outputs }
 		} catch (error) {
 			throw new Error(`Failed to get audio devices: ${error.message}`)
+		}
+	}
+
+	/**
+	 * Get device-specific optimal configuration
+	 * @param {Object} device - Audio device object
+	 * @returns {Object} Optimal configuration for the device
+	 */
+	getDeviceConfig(device) {
+		// Use device's default sample rate if available, otherwise fallback to our default
+		const sampleRate = device.defaultSampleRate || this.defaultConfig.sampleRate
+
+		return {
+			channelCount: Math.min(
+				device.maxInputChannels || device.maxOutputChannels || 2,
+				2
+			),
+			sampleRate: sampleRate,
+			sampleFormat: portAudio.SampleFormat24Bit,
+			framesPerBuffer: this.defaultConfig.framesPerBuffer,
 		}
 	}
 
@@ -47,20 +67,64 @@ class AudioService {
 				throw new Error(`Output device with ID ${outputId} not found`)
 			}
 
-			const audioInput = new portAudio.AudioIO({
-				inOptions: {
-					deviceId: inputId,
-					...this.defaultConfig,
-					closeOnError: true,
-				},
-			})
+			// Get device-specific configurations
+			const inputConfig = this.getDeviceConfig(inputDevice)
+			const outputConfig = this.getDeviceConfig(outputDevice)
 
-			const audioOutput = new portAudio.AudioIO({
-				outOptions: {
-					deviceId: outputId,
-					...this.defaultConfig,
-				},
-			})
+			console.log(`Input device "${inputDevice.name}" config:`, inputConfig)
+			console.log(`Output device "${outputDevice.name}" config:`, outputConfig)
+
+			let audioInput, audioOutput
+
+			// Try 24-bit first, fallback to 16-bit if needed
+			try {
+				audioInput = new portAudio.AudioIO({
+					inOptions: {
+						deviceId: inputId,
+						...inputConfig,
+						closeOnError: true,
+					},
+				})
+
+				audioOutput = new portAudio.AudioIO({
+					outOptions: {
+						deviceId: outputId,
+						...outputConfig,
+					},
+				})
+			} catch (formatError) {
+				console.warn(
+					'24-bit format failed, trying 16-bit fallback:',
+					formatError.message
+				)
+
+				// Fallback to 16-bit
+				const fallbackInputConfig = {
+					...inputConfig,
+					sampleFormat: portAudio.SampleFormat16Bit,
+				}
+				const fallbackOutputConfig = {
+					...outputConfig,
+					sampleFormat: portAudio.SampleFormat16Bit,
+				}
+
+				audioInput = new portAudio.AudioIO({
+					inOptions: {
+						deviceId: inputId,
+						...fallbackInputConfig,
+						closeOnError: true,
+					},
+				})
+
+				audioOutput = new portAudio.AudioIO({
+					outOptions: {
+						deviceId: outputId,
+						...fallbackOutputConfig,
+					},
+				})
+
+				console.log('Successfully created streams with 16-bit fallback')
+			}
 
 			// Set up the audio pipeline
 			audioInput.pipe(audioOutput)
