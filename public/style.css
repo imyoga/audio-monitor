@@ -160,6 +160,7 @@ body {
 	background: var(--card);
 	color: var(--text);
 }
+
 .count {
 	color: var(--muted);
 	font-size: 12px;
@@ -209,6 +210,11 @@ body {
 .device-item:hover {
 	background: rgba(127, 127, 127, 0.08);
 }
+.device-item.selected {
+	outline: 2px solid rgba(59, 130, 246, 0.35); /* subtle blue */
+	outline-offset: -2px;
+	background: rgba(59, 130, 246, 0.06);
+}
 .device-item input {
 	accent-color: var(--accent);
 }
@@ -221,6 +227,13 @@ body {
 .device-meta {
 	color: var(--muted);
 	font-size: 12px;
+}
+.hl {
+	background: rgba(255, 245, 157, 0.55); /* light yellow with alpha */
+	border: 1px solid #f47f1f;
+	color: inherit;
+	padding: 0 2px;
+	border-radius: 3px;
 }
 .badge {
 	display: inline-block;
@@ -238,11 +251,23 @@ body {
 	background: rgba(16, 185, 129, 0.15);
 	border-color: rgba(16, 185, 129, 0.35);
 }
+.badge-inuse {
+	background: rgba(234, 179, 8, 0.18); /* amber */
+	border-color: rgba(234, 179, 8, 0.45);
+	color: inherit;
+}
 .compatible {
 	box-shadow: inset 3px 0 0 0 var(--accent-2);
 }
 .incompatible {
 	opacity: 0.8;
+}
+.device-item.disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+.device-item.disabled input[disabled] {
+	cursor: not-allowed;
 }
 
 .actions {

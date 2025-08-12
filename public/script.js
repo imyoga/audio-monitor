@@ -40,33 +40,71 @@ function updateButtonStates() {
 	stopBtn.disabled = !isRouting
 }
 
+// Highlight helpers
+function escapeRegex(s) {
+	return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+function escapeHtml(s) {
+	return String(s)
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;')
+}
+function highlightTerm(text, term) {
+	if (!term) return escapeHtml(text)
+	const safe = escapeHtml(text)
+	try {
+		const re = new RegExp(`(${escapeRegex(term)})`, 'ig')
+		return safe.replace(re, '<mark class="hl">$1</mark>')
+	} catch {
+		return safe
+	}
+}
+
 function deviceItemTemplate(
 	device,
 	groupName,
 	highlight = false,
-	deemphasize = false
+	deemphasize = false,
+	searchTerm = '',
+	options = {}
 ) {
 	const id = `${groupName}-${device.id}`
-	const cls = `device-item ${highlight ? 'compatible' : ''} ${
+	const isDisabled = !!options.disabled
+	const cls = `device-item ${!isDisabled && highlight ? 'compatible' : ''} ${
 		deemphasize ? 'incompatible' : ''
-	}`
+	} ${isDisabled ? 'disabled' : ''}`
 	const sr = device.defaultSampleRate || 'n/a'
 	const meta = `id: ${device.id} • default SR: ${sr} • in:${
 		device.maxInputChannels || 0
 	} out:${device.maxOutputChannels || 0}`
-	const tip = `${device.name} — ${meta}`
+	const tipDetail = options.disabledReason
+		? ` • (${options.disabledReason})`
+		: ''
+	const tip = `${device.name} — ${meta}${isDisabled ? tipDetail : ''}`
 	const hasIn = (device.maxInputChannels || 0) > 0
 	const hasOut = (device.maxOutputChannels || 0) > 0
 	const badges = `
 					${hasIn ? '<span class="badge badge-mic">Mic</span>' : ''}
 					${hasOut ? '<span class="badge badge-speaker">Speaker</span>' : ''}
-				`
+				${
+					options.extraBadge
+						? `<span class="badge badge-inuse">${options.extraBadge}</span>`
+						: ''
+				}
+			`
+	const nameHtml = `${badges} ${highlightTerm(device.name || '', searchTerm)}`
+	const metaHtml = highlightTerm(meta, searchTerm)
 	return `
 					<label class="${cls}" title="${tip}">
-						<input type="radio" id="${id}" name="${groupName}" value="${device.id}">
+						<input type="radio" id="${id}" name="${groupName}" value="${device.id}" ${
+		isDisabled ? 'disabled aria-disabled="true"' : ''
+	}>
 						<div>
-							<div class="device-name">${badges} ${device.name}</div>
-							<div class="device-meta">${meta}</div>
+							<div class="device-name">${nameHtml}</div>
+							<div class="device-meta">${metaHtml}</div>
 						</div>
 					</label>
 				`
@@ -78,6 +116,9 @@ function renderListsWithFilters() {
 		.getElementById('searchOutput')
 		.value.toLowerCase()
 
+	// Preserve current selections before we re-render
+	const prevSelectedOutputId = getSelectedRadioValue('outputDevice')
+
 	const selectedInputId = getSelectedRadioValue('inputDevice')
 	const selectedInput = inputsData.find(
 		(d) => String(d.id) === String(selectedInputId)
@@ -86,12 +127,28 @@ function renderListsWithFilters() {
 	const inputList = document.getElementById('inputList')
 	const outputList = document.getElementById('outputList')
 
-	const filteredInputs = inputsData.filter((d) =>
-		d.name.toLowerCase().includes(inputFilter)
-	)
-	const filteredOutputs = outputsData.filter((d) =>
-		d.name.toLowerCase().includes(outputFilter)
-	)
+	const matchesAll = (d, term) => {
+		if (!term) return true
+		const name = (d.name || '').toLowerCase()
+		const id = String(d.id).toLowerCase()
+		const sr = String(d.defaultSampleRate || '').toLowerCase()
+		const host = String(d.hostAPIName || d.hostAPI || '').toLowerCase()
+		const inCh = String(d.maxInputChannels || 0)
+		const outCh = String(d.maxOutputChannels || 0)
+		const combined = `${inCh}/${outCh}`
+		return (
+			name.includes(term) ||
+			id.includes(term) ||
+			sr.includes(term) ||
+			host.includes(term) ||
+			inCh.includes(term) ||
+			outCh.includes(term) ||
+			combined.includes(term)
+		)
+	}
+
+	const filteredInputs = inputsData.filter((d) => matchesAll(d, inputFilter))
+	const filteredOutputs = outputsData.filter((d) => matchesAll(d, outputFilter))
 
 	// Group by host API and sort groups; items by badge category (Mic, Speaker, Both) then name
 	const badgeRank = (d) => {
@@ -132,7 +189,9 @@ function renderListsWithFilters() {
 	inputList.innerHTML = inputGroups
 		.map(([gName, items]) => {
 			const itemsHtml = items
-				.map((d) => deviceItemTemplate(d, 'inputDevice'))
+				.map((d) =>
+					deviceItemTemplate(d, 'inputDevice', false, false, inputFilter)
+				)
 				.join('')
 			return `<div class="group">
 							<div class="group-label">${gName} <span class="group-count">(${items.length})</span></div>
@@ -150,15 +209,63 @@ function renderListsWithFilters() {
 				.map((d) => {
 					let highlight = false
 					let deemph = false
+					let isDisabled = false
+					let disabledReason = ''
 					if (selectedInput) {
 						const inSR = selectedInput.defaultSampleRate
 						const outSR = d.defaultSampleRate
 						if (inSR && outSR) {
 							highlight = inSR === outSR
 							deemph = !highlight
+							// If sample rates don't match, disable this output
+							if (inSR !== outSR) {
+								isDisabled = true
+								disabledReason = 'sample rate mismatch'
+							}
+						}
+						// Disable the same device on the right side if it's selected on the left
+						if (String(selectedInput.id) === String(d.id)) {
+							isDisabled = true
+							disabledReason = "can't send audio to same as captured device"
 						}
 					}
-					return deviceItemTemplate(d, 'outputDevice', highlight, deemph)
+
+					// If backend flags a device as in-use by Windows/OS, disable it too
+					const inUseBySystem = !!(
+						d.inUseBySystem ||
+						d.inUseByOS ||
+						d.isInUse ||
+						d.isBusy ||
+						d.busy
+					)
+					if (!isDisabled && inUseBySystem) {
+						isDisabled = true
+						disabledReason = 'in use by Windows'
+					}
+					return deviceItemTemplate(
+						d,
+						'outputDevice',
+						highlight,
+						deemph,
+						outputFilter,
+						{
+							disabled: isDisabled,
+							extraBadge: (() => {
+								if (!isDisabled) return ''
+								switch (disabledReason) {
+									case 'in use by Windows':
+										return 'In use by Windows'
+									case "can't send audio to same as captured device":
+										return "Can't send to same device"
+									case 'sample rate mismatch':
+										return 'Sample rate mismatch'
+									default:
+										return 'Unavailable'
+								}
+							})(),
+							disabledReason,
+						}
+					)
 				})
 				.join('')
 			return `<div class="group">
@@ -173,17 +280,34 @@ function renderListsWithFilters() {
 		const el = document.getElementById(`inputDevice-${selectedInputId}`)
 		if (el) el.checked = true
 	}
-	const selectedOutputId = getSelectedRadioValue('outputDevice')
-	if (selectedOutputId) {
-		const el = document.getElementById(`outputDevice-${selectedOutputId}`)
-		if (el) el.checked = true
+	if (prevSelectedOutputId) {
+		const el = document.getElementById(`outputDevice-${prevSelectedOutputId}`)
+		if (el && !el.disabled) el.checked = true
 	}
 
-	inputList.addEventListener('change', () => {
+	// Visually mark selected input item with a light border
+	const markSelectedInput = () => {
+		const list = document.getElementById('inputList')
+		if (!list) return
+		list
+			.querySelectorAll('.device-item.selected')
+			.forEach((el) => el.classList.remove('selected'))
+		const checked = list.querySelector('input[name="inputDevice"]:checked')
+		if (checked) {
+			const parent = checked.closest('.device-item')
+			if (parent) parent.classList.add('selected')
+		}
+	}
+	markSelectedInput()
+
+	// Avoid stacking multiple listeners across re-renders
+	inputList.onchange = () => {
 		renderListsWithFilters()
 		updateButtonStates()
-	})
-	outputList.addEventListener('change', updateButtonStates)
+	}
+	outputList.onchange = () => {
+		updateButtonStates()
+	}
 	updateButtonStates()
 }
 
@@ -327,8 +451,7 @@ document
 document
 	.getElementById('searchOutput')
 	.addEventListener('input', renderListsWithFilters)
-
-// Init
+// Initial load: fetch devices so the UI is populated without manual refresh
 fetchDevices()
 fetchRoutes()
 routesTimer = setInterval(() => {

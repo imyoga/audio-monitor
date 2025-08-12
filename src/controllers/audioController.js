@@ -75,4 +75,16 @@ module.exports = {
 		}
 		res.status(200).json({ success: true, message: `Stopped route ${id}` })
 	}),
+	status: asyncHandler(async (req, res) => {
+		const routes = getActiveRoutes()
+		res.status(200).json({
+			success: true,
+			data: {
+				uptimeSec: Math.floor(process.uptime()),
+				pid: process.pid,
+				routesCount: routes.length,
+				routes,
+			},
+		})
+	}),
 }

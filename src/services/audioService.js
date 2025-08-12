@@ -242,7 +242,8 @@ class AudioService {
 			try {
 				audioInput = new portAudio.AudioIO({
 					inOptions: {
-						deviceId: inputId,
+						// Use the resolved input device (may be a loopback proxy for an output selection)
+						deviceId: inputDevice.id,
 						...commonConfig,
 						closeOnError: true,
 					},
@@ -250,7 +251,7 @@ class AudioService {
 
 				audioOutput = new portAudio.AudioIO({
 					outOptions: {
-						deviceId: outputId,
+						deviceId: outputDevice.id,
 						...commonConfig,
 						closeOnError: true,
 					},
@@ -269,7 +270,7 @@ class AudioService {
 
 				audioInput = new portAudio.AudioIO({
 					inOptions: {
-						deviceId: inputId,
+						deviceId: inputDevice.id,
 						...fallbackCommonConfig,
 						closeOnError: true,
 					},
@@ -277,7 +278,7 @@ class AudioService {
 
 				audioOutput = new portAudio.AudioIO({
 					outOptions: {
-						deviceId: outputId,
+						deviceId: outputDevice.id,
 						...fallbackCommonConfig,
 						closeOnError: true,
 					},
@@ -300,6 +301,13 @@ class AudioService {
 				} catch {}
 				this.safeQuit(audioInput)
 				this.safeQuit(audioOutput)
+				// Remove this route from active list if present
+				try {
+					const idx = this.activeStreams.findIndex(
+						(s) => s.audioInput === audioInput || s.audioOutput === audioOutput
+					)
+					if (idx !== -1) this.activeStreams.splice(idx, 1)
+				} catch {}
 			}
 			audioInput.on('error', onStreamError)
 			audioOutput.on('error', onStreamError)
@@ -324,15 +332,17 @@ class AudioService {
 	}
 
 	/**
-	 * Start audio streams in the correct order
-	 * @param {Object} audioOutput - Audio output stream
+	 * Start audio streams
+	 * Prefer starting output before input to avoid underflow on some hosts
 	 * @param {Object} audioInput - Audio input stream
+	 * @param {Object} audioOutput - Audio output stream
 	 */
 	async startStreams(audioInput, audioOutput) {
 		return new Promise((resolve, reject) => {
 			try {
-				audioInput.start()
+				// Start output first, then input
 				audioOutput.start()
+				audioInput.start()
 				resolve()
 			} catch (error) {
 				reject(error)

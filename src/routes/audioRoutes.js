@@ -5,6 +5,7 @@ const {
 	stopAudioRoutes,
 	listRoutes,
 	stopRouteById,
+	status,
 } = require('../controllers/audioController')
 const { validateRouteRequest } = require('../middleware/validation')
 
@@ -24,5 +25,8 @@ router.get('/routes', listRoutes)
 
 // POST /api/route/:id/stop - Stop a specific route
 router.post('/route/:id/stop', stopRouteById)
+
+// GET /api/status - Diagnostics / uptime / route count
+router.get('/status', status)
 
 module.exports = router
