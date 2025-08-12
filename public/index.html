@@ -2,268 +2,78 @@
 <html lang="en">
 	<head>
 		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Audio Router</title>
-		<style>
-			body {
-				font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-				padding: 20px;
-				max-width: 600px;
-				margin: 0 auto;
-				background-color: #f5f5f5;
-			}
-			.container {
-				background: white;
-				padding: 30px;
-				border-radius: 10px;
-				box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-			}
-			h1 {
-				color: #333;
-				text-align: center;
-				margin-bottom: 30px;
-			}
-			.form-group {
-				margin-bottom: 20px;
-			}
-			label {
-				display: block;
-				margin-bottom: 5px;
-				font-weight: bold;
-				color: #555;
-			}
-			select,
-			button {
-				width: 100%;
-				padding: 10px;
-				font-size: 16px;
-				border: 2px solid #ddd;
-				border-radius: 5px;
-				box-sizing: border-box;
-			}
-			select:focus {
-				border-color: #4caf50;
-				outline: none;
-			}
-			button {
-				background-color: #4caf50;
-				color: white;
-				border: none;
-				cursor: pointer;
-				margin: 5px 0;
-				transition: background-color 0.3s;
-			}
-			button:hover {
-				background-color: #45a049;
-			}
-			button:disabled {
-				background-color: #cccccc;
-				cursor: not-allowed;
-			}
-			.stop-btn {
-				background-color: #f44336;
-			}
-			.stop-btn:hover {
-				background-color: #da190b;
-			}
-			.status {
-				margin-top: 20px;
-				padding: 10px;
-				border-radius: 5px;
-				display: none;
-			}
-			.status.success {
-				background-color: #d4edda;
-				color: #155724;
-				border: 1px solid #c3e6cb;
-			}
-			.status.error {
-				background-color: #f8d7da;
-				color: #721c24;
-				border: 1px solid #f5c6cb;
-			}
-			.loading {
-				text-align: center;
-				color: #666;
-			}
-		</style>
 	</head>
 	<body>
 		<div class="container">
-			<h1>🎵 Audio Router</h1>
-
-			<div class="form-group">
-				<label for="inputSelect">Input Device:</label>
-				<select id="inputSelect">
-					<option value="">Select an input device...</option>
-				</select>
+			<div class="header">
+				<div class="title">
+					<div style="font-size: 22px">🎵</div>
+					<h1>Audio Router</h1>
+				</div>
+				<div id="status" class="status" aria-live="polite"></div>
+				<div class="toolbar">
+					<button class="btn" id="refreshBtn" title="Refresh devices">
+						🔁 Refresh
+					</button>
+					<button class="btn-ghost" id="themeBtn" title="Toggle theme">
+						🌓 Theme
+					</button>
+				</div>
 			</div>
 
-			<div class="form-group">
-				<label for="outputSelect">Output Device:</label>
-				<select id="outputSelect">
-					<option value="">Select an output device...</option>
-				</select>
+			<div class="cards">
+				<div class="card">
+					<h2>Input (Recording) Devices</h2>
+					<div class="search-row">
+						<input id="searchInput" placeholder="Search input devices..." />
+						<div class="count" id="countInput">0</div>
+					</div>
+					<div
+						id="inputList"
+						class="device-list"
+						role="radiogroup"
+						aria-label="Input devices"
+					></div>
+				</div>
+
+				<div class="card">
+					<h2>Output (Playback) Devices</h2>
+					<div class="search-row">
+						<input id="searchOutput" placeholder="Search output devices..." />
+						<div class="count" id="countOutput">0</div>
+					</div>
+					<div
+						id="outputList"
+						class="device-list"
+						role="radiogroup"
+						aria-label="Output devices"
+					></div>
+				</div>
+
+				<div class="card">
+					<h2>Active Routes</h2>
+					<div class="routes-list" id="routesList"></div>
+					<div class="actions" style="margin-top: 10px">
+						<button class="btn btn-danger" onclick="stopRouting()">
+							⏹ Stop All
+						</button>
+						<button class="btn" id="refreshRoutesBtn">🔄 Refresh Routes</button>
+					</div>
+				</div>
 			</div>
 
-			<button id="startBtn" onclick="startRouting()">
-				🎤 Start Audio Routing
-			</button>
-			<button id="stopBtn" class="stop-btn" onclick="stopRouting()">
-				⏹️ Stop All Routes
-			</button>
-
-			<div id="status" class="status"></div>
+			<div class="actions">
+				<button id="startBtn" class="btn btn-primary" onclick="startRouting()">
+					🎤 Start Routing
+				</button>
+				<button id="stopBtn" class="btn btn-danger" onclick="stopRouting()">
+					⏹ Stop All
+				</button>
+			</div>
 		</div>
 
-		<script>
-			let isRouting = false
-
-			function showStatus(message, isError = false) {
-				const statusDiv = document.getElementById('status')
-				statusDiv.textContent = message
-				statusDiv.className = `status ${isError ? 'error' : 'success'}`
-				statusDiv.style.display = 'block'
-
-				// Hide status after 5 seconds
-				setTimeout(() => {
-					statusDiv.style.display = 'none'
-				}, 5000)
-			}
-
-			function updateButtonStates() {
-				const startBtn = document.getElementById('startBtn')
-				const stopBtn = document.getElementById('stopBtn')
-				const inputSelect = document.getElementById('inputSelect')
-				const outputSelect = document.getElementById('outputSelect')
-
-				const hasDevicesSelected = inputSelect.value && outputSelect.value
-
-				startBtn.disabled = isRouting || !hasDevicesSelected
-				stopBtn.disabled = !isRouting
-			}
-
-			async function fetchDevices() {
-				try {
-					showStatus('Loading audio devices...', false)
-					const res = await fetch('/api/devices')
-					const response = await res.json()
-
-					if (!response.success) {
-						throw new Error(response.message || 'Failed to fetch devices')
-					}
-
-					const { inputs, outputs } = response.data
-					const inputSelect = document.getElementById('inputSelect')
-					const outputSelect = document.getElementById('outputSelect')
-
-					// Clear existing options (except the first placeholder)
-					inputSelect.innerHTML =
-						'<option value="">Select an input device...</option>'
-					outputSelect.innerHTML =
-						'<option value="">Select an output device...</option>'
-
-					// Add input devices
-					inputs.forEach((device) => {
-						const option = new Option(device.name, device.id)
-						inputSelect.appendChild(option)
-					})
-
-					// Add output devices
-					outputs.forEach((device) => {
-						const option = new Option(device.name, device.id)
-						outputSelect.appendChild(option)
-					})
-
-					showStatus(
-						`✅ Found ${inputs.length} input(s) and ${outputs.length} output(s)`,
-						false
-					)
-					updateButtonStates()
-				} catch (error) {
-					console.error('Error fetching devices:', error)
-					showStatus(`❌ Error loading devices: ${error.message}`, true)
-				}
-			}
-
-			async function startRouting() {
-				const inputId = document.getElementById('inputSelect').value
-				const outputId = document.getElementById('outputSelect').value
-
-				if (!inputId || !outputId) {
-					showStatus('❌ Please select both input and output devices', true)
-					return
-				}
-
-				try {
-					showStatus('🔄 Starting audio routing...', false)
-
-					const res = await fetch('/api/route', {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({
-							inputId: parseInt(inputId),
-							outputId: parseInt(outputId),
-						}),
-					})
-
-					const response = await res.json()
-
-					if (!response.success) {
-						throw new Error(
-							response.error || response.message || 'Failed to start routing'
-						)
-					}
-
-					isRouting = true
-					updateButtonStates()
-
-					const { inputDevice, outputDevice } = response.data
-					showStatus(
-						`🎵 Audio routing started: ${inputDevice} → ${outputDevice}`,
-						false
-					)
-				} catch (error) {
-					console.error('Error starting routing:', error)
-					showStatus(`❌ Failed to start routing: ${error.message}`, true)
-				}
-			}
-
-			async function stopRouting() {
-				try {
-					showStatus('🔄 Stopping audio routing...', false)
-
-					const res = await fetch('/api/stop', {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
-					})
-
-					const response = await res.json()
-
-					if (!response.success) {
-						throw new Error(response.message || 'Failed to stop routing')
-					}
-
-					isRouting = false
-					updateButtonStates()
-
-					const { stoppedCount } = response.data
-					showStatus(`⏹️ Stopped ${stoppedCount} audio route(s)`, false)
-				} catch (error) {
-					console.error('Error stopping routing:', error)
-					showStatus(`❌ Failed to stop routing: ${error.message}`, true)
-				}
-			}
-
-			// Event listeners for device selection changes
-			document
-				.getElementById('inputSelect')
-				.addEventListener('change', updateButtonStates)
-			document
-				.getElementById('outputSelect')
-				.addEventListener('change', updateButtonStates)
-
-			// Initialize the page
-			fetchDevices()
-		</script>
+		<script src="script.js"></script>
 	</body>
 </html>

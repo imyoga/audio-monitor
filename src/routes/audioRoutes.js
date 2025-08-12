@@ -3,6 +3,8 @@ const {
 	getDevices,
 	startAudioRoute,
 	stopAudioRoutes,
+	listRoutes,
+	stopRouteById,
 } = require('../controllers/audioController')
 const { validateRouteRequest } = require('../middleware/validation')
 
@@ -16,5 +18,11 @@ router.post('/route', validateRouteRequest, startAudioRoute)
 
 // POST /api/stop - Stop all audio routes
 router.post('/stop', stopAudioRoutes)
+
+// GET /api/routes - List active routes
+router.get('/routes', listRoutes)
+
+// POST /api/route/:id/stop - Stop a specific route
+router.post('/route/:id/stop', stopRouteById)
 
 module.exports = router
